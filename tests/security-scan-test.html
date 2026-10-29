@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>RUNNING</title>
+<style>body{font-family:Consolas,monospace;background:#0d1728;color:#dbe7ff;padding:24px}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+<pre id="out">running...</pre>
+<script src="../answerer-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var lines = [];
+  var failures = 0;
+  var passes = 0;
+  function record(ok, name, detail) {
+    if (ok) { passes++; lines.push('PASS  ' + name); }
+    else { failures++; lines.push('FAIL  ' + name + (detail ? '\n      ' + detail : '')); }
+  }
+
+  // ---- 从 OCS 5.2.3 packages/scripts/src/utils/answer-wrapper-security.ts 复制 ----
+  var DANGEROUS_PATTERNS = [
+    { pattern: /\beval\b/, feature: 'eval' },
+    { pattern: /\bFunction\s*\(/, feature: 'Function()' },
+    { pattern: /\bfetch\s*\(/, feature: 'fetch' },
+    { pattern: /\bXMLHttpRequest\b/, feature: 'XMLHttpRequest' },
+    { pattern: /\bGM_xmlhttpRequest\b|\bGM\s*\.\s*xmlHttpRequest\b/, feature: 'GM_xmlhttpRequest' },
+    { pattern: /\bGM_\w+|\bGM\s*\.\s*\w+/, feature: 'GM API' },
+    { pattern: /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b/, feature: '本地存储' },
+    { pattern: /\bcookie\b/i, feature: 'cookie' },
+    { pattern: /\bsendBeacon\b/, feature: 'sendBeacon' },
+    { pattern: /\bWebSocket\b|\bEventSource\b/, feature: 'WebSocket/EventSource' },
+    { pattern: /\blocation\b/, feature: 'location' },
+    { pattern: /\bwindow\b|\bglobalThis\b|\bunsafeWindow\b|\btop\b|\bparent\b|\bopener\b/, feature: '全局对象' },
+    { pattern: /\bdocument\b/, feature: 'document' },
+    { pattern: /\bpostMessage\b/, feature: 'postMessage' },
+    { pattern: /\bimport\s*\(/, feature: 'import()' },
+    { pattern: /\brequire\s*\(/, feature: 'require()' },
+    { pattern: /\.constructor\b|\b__proto__\b/, feature: '原型链访问' },
+    { pattern: /\bfromCharCode\b|\batob\b|\bunescape\b/, feature: '解码函数' },
+    { pattern: /\bWorker\b/, feature: 'Worker' },
+    { pattern: /\[\s*['"\x60][^\]'"]*['"\x60]\s*\+|\+\s*['"\x60][^\]'"]*['"\x60]\s*\]/, feature: '拼接属性访问' }
+  ];
+
+  function stripCommentsAndStrings(code) {
+    var stripped = '';
+    var i = 0;
+    while (i < code.length) {
+      var ch = code[i];
+      var next = code[i + 1];
+      if (ch === '/' && next === '/') { while (i < code.length && code[i] !== '\n') i++; continue; }
+      if (ch === '/' && next === '*') { i += 2; while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) i++; i += 2; continue; }
+      if (ch === "'" || ch === '"' || ch === '\x60') {
+        var quote = ch;
+        i++;
+        while (i < code.length && code[i] !== quote) {
+          if (code[i] === '\\') { i += 2; continue; }
+          if (quote !== '\x60' && code[i] === '\n') break;
+          i++;
+        }
+        i++;
+        stripped += '""';
+        continue;
+      }
+      stripped += ch;
+      i++;
+    }
+    return stripped;
+  }
+
+  function detect(code) {
+    var stripped = stripCommentsAndStrings(code);
+    var found = [];
+    for (var i = 0; i < DANGEROUS_PATTERNS.length; i++) {
+      if (DANGEROUS_PATTERNS[i].pattern.test(stripped)) found.push(DANGEROUS_PATTERNS[i].feature);
+    }
+    return found;
+  }
+
+  var config = DeepSeekQBank.createConfig({
+    apiKey: 'sk-test',
+    model: 'deepseek-flash',
+    mode: 'fetch',
+    sendThinking: true,
+    temperature: 0.1,
+    maxTokens: 4096
+  });
+  var handlerFindings = detect(config[0].handler);
+  var messagesFindings = detect(config[0].data.messages.handler);
+  record(handlerFindings.length === 0, 'handler 无风险特征', handlerFindings.join(', '));
+  record(messagesFindings.length === 0, 'messages handler 无风险特征', messagesFindings.join(', '));
+
+  var bad = "return (res) => res['a' + 'b'];";
+  var badFindings = detect(bad);
+  record(badFindings.indexOf('拼接属性访问') !== -1, '扫描器能识别已知拼接模式', badFindings.join(', '));
+
+  var badArray = "return ['DeepSeek 请求失败：' + msg, undefined];";
+  record(detect(badArray).indexOf('拼接属性访问') !== -1, '扫描器能识别数组拼接误报样例', detect(badArray).join(', '));
+
+  var out = document.getElementById('out');
+  out.textContent = 'RESULT: ' + (failures ? 'FAIL' : 'PASS') + '\npassed: ' + passes + ', failed: ' + failures + '\n\n' + lines.join('\n');
+  document.title = failures ? 'FAIL' : 'PASS';
+  document.body.setAttribute('data-result', failures ? 'FAIL' : 'PASS');
+})();
+</script>
+</body>
+</html>

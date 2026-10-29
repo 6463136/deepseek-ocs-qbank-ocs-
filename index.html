@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>DeepSeek × OCS 题库配置生成器</title>
+<style>
+  :root {
+    --bg: #f3f6fb;
+    --bg2: #e9eef8;
+    --card: rgba(255, 255, 255, 0.88);
+    --card-solid: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --faint: #94a3b8;
+    --line: #dbe3ef;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --accent-soft: #eaf0ff;
+    --ok: #047857;
+    --ok-soft: #e7f8f0;
+    --warn: #b45309;
+    --warn-soft: #fff7e6;
+    --bad: #b91c1c;
+    --bad-soft: #fef1f1;
+    --code-bg: #0d1728;
+    --code-ink: #dbe7ff;
+    --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+    --radius: 18px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #080d17;
+      --bg2: #0d1523;
+      --card: rgba(16, 25, 41, 0.86);
+      --card-solid: #101929;
+      --ink: #e8eefc;
+      --muted: #9aabc4;
+      --faint: #6f819c;
+      --line: #24324a;
+      --accent: #6d9cff;
+      --accent2: #b18cff;
+      --accent-soft: #15233e;
+      --ok: #4ade80;
+      --ok-soft: #0d2b21;
+      --warn: #fbbf24;
+      --warn-soft: #2b2110;
+      --bad: #f87171;
+      --bad-soft: #2c1418;
+      --code-bg: #060b14;
+      --code-ink: #dbe7ff;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(900px 500px at 8% -8%, rgba(37, 99, 235, 0.15), transparent 60%),
+      radial-gradient(800px 480px at 100% 0%, rgba(124, 58, 237, 0.13), transparent 58%),
+      linear-gradient(180deg, var(--bg), var(--bg2));
+    background-attachment: fixed;
+    line-height: 1.65;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { width: min(1160px, calc(100% - 40px)); margin: 0 auto; }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(16px);
+    background: color-mix(in srgb, var(--bg) 76%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  }
+  .topbar-inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    min-height: 66px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: grid; place-items: center;
+    color: #fff; font-weight: 800; font-size: 19px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  }
+  .brand strong { display: block; font-size: 15px; letter-spacing: 0.2px; }
+  .brand small { display: block; color: var(--muted); font-size: 12px; line-height: 1.2; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 13px; border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card-solid);
+    color: var(--muted); font-size: 13px; white-space: nowrap;
+  }
+  .pill::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--faint);
+  }
+  .pill.ok { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .pill.ok::before { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 16%, transparent); }
+  .pill.bad { color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .pill.bad::before { background: var(--bad); }
+  .hero { padding: 62px 0 30px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--accent); font-weight: 700; font-size: 12px;
+    letter-spacing: 1.4px; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .eyebrow::before { content: ""; width: 28px; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; }
+  h1 {
+    margin: 0 0 18px;
+    font-size: clamp(34px, 5.4vw, 58px);
+    line-height: 1.08;
+    letter-spacing: -1.6px;
+    font-weight: 800;
+  }
+  h1 span {
+    background: linear-gradient(100deg, var(--accent), var(--accent2) 70%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { max-width: 720px; margin: 0; color: var(--muted); font-size: 16px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+  .badge {
+    font-size: 12.5px; color: var(--muted);
+    border: 1px solid var(--line); background: color-mix(in srgb, var(--card-solid) 80%, transparent);
+    padding: 6px 11px; border-radius: 999px;
+  }
+  .badge b { color: var(--ink); font-weight: 650; }
+  main { padding: 8px 0 70px; }
+  .grid { display: grid; gap: 22px; }
+  .grid.two { grid-template-columns: 1.02fr 0.98fr; align-items: start; }
+  @media (max-width: 900px) { .grid.two { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    padding: 26px;
+    margin-bottom: 22px;
+  }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+  .step {
+    display: inline-grid; place-items: center;
+    width: 27px; height: 27px; border-radius: 9px;
+    color: var(--accent); background: var(--accent-soft);
+    font-weight: 800; font-size: 13px; flex: none;
+    margin-right: 10px;
+  }
+  h2 { display: flex; align-items: center; margin: 0; font-size: 18px; letter-spacing: -0.2px; }
+  .card-head p { margin: 4px 0 0 37px; color: var(--muted); font-size: 13px; }
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 7px; }
+  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+  .label-row label { margin: 0; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .tiny-link { font-size: 12px; font-weight: 500; color: var(--accent); }
+  input, select, textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: var(--card-solid);
+    color: var(--ink);
+    border-radius: 11px;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.16s, box-shadow 0.16s;
+  }
+  textarea { resize: vertical; min-height: 84px; line-height: 1.55; }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  .input-group { display: flex; gap: 8px; }
+  .input-group input { flex: 1; min-width: 0; }
+  .btn {
+    appearance: none; border: 1px solid transparent;
+    border-radius: 11px; padding: 10px 15px;
+    font: inherit; font-size: 13.5px; font-weight: 650;
+    cursor: pointer; white-space: nowrap;
+    color: var(--ink); background: var(--card-solid);
+    border-color: var(--line);
+    transition: transform 0.12s, box-shadow 0.16s, background 0.16s, border-color 0.16s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn.primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-color: transparent;
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  .btn.primary:hover { box-shadow: 0 14px 30px color-mix(in srgb, var(--accent) 34%, transparent); }
+  .btn.ghost { background: transparent; color: var(--muted); }
+  .btn.small { padding: 7px 10px; font-size: 12px; border-radius: 9px; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+  .mode-hint {
+    margin-top: 9px; padding: 9px 11px; border-radius: 9px;
+    font-size: 12.5px; color: var(--muted);
+    background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  details.advanced { margin-top: 16px; border-top: 1px dashed var(--line); padding-top: 14px; }
+  details.advanced summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+  details.advanced .field:first-of-type { margin-top: 14px; }
+  .check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: var(--muted); }
+  .check input { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--accent); }
+  .check b { color: var(--ink); font-weight: 600; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } }
+  .example-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+  .chip {
+    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+    font: inherit;
+  }
+  .chip:hover { color: var(--accent); border-color: var(--accent); }
+  .result {
+    display: none; margin-top: 16px;
+    border: 1px solid var(--line); border-radius: 13px;
+    padding: 15px; background: var(--card-solid);
+  }
+  .result.show { display: block; }
+  .result.ok { border-color: color-mix(in srgb, var(--ok) 34%, transparent); background: color-mix(in srgb, var(--ok-soft) 70%, var(--card-solid)); }
+  .result.bad { border-color: color-mix(in srgb, var(--bad) 34%, transparent); background: color-mix(in srgb, var(--bad-soft) 70%, var(--card-solid)); }
+  .result-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .result-label { font-size: 12px; color: var(--muted); font-weight: 650; }
+  .answer {
+    font-size: 26px; line-height: 1.3; font-weight: 800; letter-spacing: -0.5px;
+    word-break: break-word; margin: 2px 0 8px;
+  }
+  .result p { margin: 4px 0; color: var(--muted); font-size: 13px; }
+  .result .warn { color: var(--warn); font-size: 12.5px; margin-top: 8px; }
+  .result pre { margin: 10px 0 0; max-height: 190px; overflow: auto; }
+  .code {
+    margin: 0; padding: 16px; border-radius: 13px;
+    background: var(--code-bg); color: var(--code-ink);
+    font-family: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+    font-size: 12px; line-height: 1.6; overflow: auto;
+    max-height: 380px; white-space: pre; tab-size: 2;
+  }
+  .code-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 8px; color: var(--muted); font-size: 12px; }
+  .steps { margin: 18px 0 0; padding: 0; list-style: none; counter-reset: step; }
+  .steps li {
+    position: relative; padding-left: 34px; margin: 12px 0;
+    color: var(--muted); font-size: 13.5px;
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 1px;
+    width: 23px; height: 23px; border-radius: 8px;
+    display: grid; place-items: center;
+    color: var(--accent); background: var(--accent-soft);
+    font-size: 11px; font-weight: 800;
+  }
+  .steps b { color: var(--ink); }
+  .notice {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    color: var(--muted);
+    padding: 11px 13px; border-radius: 0 10px 10px 0;
+    font-size: 12.5px; margin-top: 16px;
+  }
+  .notice b { color: var(--warn); }
+  details.faq {
+    border-top: 1px solid var(--line); padding: 13px 0;
+  }
+  details.faq:first-of-type { border-top: 0; padding-top: 0; }
+  details.faq summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+  details.faq p { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .footer { padding: 0 0 46px; color: var(--faint); font-size: 12px; }
+  .footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 20px);
+    background: var(--ink); color: var(--bg);
+    padding: 10px 16px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s; z-index: 50;
+    max-width: calc(100% - 40px); text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  @media (max-width: 620px) {
+    .wrap { width: calc(100% - 26px); }
+    .hero { padding-top: 42px; }
+    .card { padding: 19px; border-radius: 15px; }
+    .topbar-inner { min-height: 60px; }
+    .brand small { display: none; }
+    .pill { font-size: 12px; padding: 6px 10px; }
+    h1 { letter-spacing: -1px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <div class="logo">D</div>
+      <div><strong>DeepSeek × OCS</strong><small>题库配置生成器</small></div>
+    </div>
+    <div id="status" class="pill">等待填写 Key</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="eyebrow">AnswererWrapper · 直连 DeepSeek</div>
+    <h1>把 DeepSeek 变成<br><span>OCS 的自动答题题库</span></h1>
+    <p>不用服务器。填好 API Key，先测试一道题，再复制一段 JSON 粘贴进 OCS。支持单选、多选、判断、填空，也支持图片/公式题；默认关闭思考模式，响应更快、更省 token。</p>
+    <div class="badges">
+      <span class="badge"><b>Edge</b> / Tampermonkey</span>
+      <span class="badge"><b>OCS</b> 自定义题库</span>
+      <span class="badge"><b>deepseek-flash</b></span>
+      <span class="badge"><b>图片/公式题</b></span>
+      <span class="badge">Key 只留在本页与配置中</span>
+    </div>
+  </section>
+
+  <div class="grid two">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2><span class="step">1</span>配置模型</h2>
+          <p>Key 不会经过中转服务器；测试时浏览器直接请求 DeepSeek。</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label for="apiKey">DeepSeek API Key</label>
+          <a class="tiny-link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">去创建 Key</a>
+        </div>
+        <div class="input-group">
+          <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+          <button id="toggleKey" class="btn small" type="button">显示</button>
+        </div>
+        <div class="hint">建议单独建一个 Key，只放少量余额；不要截图或分享生成后的 JSON。</div>
+      </div>
+
+      <div class="two-col">
+        <div class="field">
+          <label for="model">模型</label>
+          <input id="model" list="modelList" value="deepseek-flash" spellcheck="false">
+          <datalist id="modelList">
+            <option value="deepseek-flash"></option>
+            <option value="deepseek-v4-pro"></option>
+          </datalist>
+          <div class="hint">官方当前推荐 <b>deepseek-flash</b>。</div>
+        </div>
+        <div class="field">
+          <label for="mode">请求方式</label>
+          <select id="mode">
+            <option value="fetch">fetch（页面请求，先试这个）</option>
+            <option value="GM_xmlhttpRequest">GM_xmlhttpRequest（更稳）</option>
+          </select>
+          <div id="modeHint" class="mode-hint">OCS 5.2.3 仍会检查域名白名单，两种模式都建议加 <b>// @connect api.deepseek.com</b>。</div>
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>高级选项</summary>
+        <div class="two-col">
+          <div class="field">
+            <label for="temperature">temperature</label>
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.1">
+          </div>
+          <div class="field">
+            <label for="maxTokens">max_tokens</label>
+            <input id="maxTokens" type="number" min="64" max="8192" step="64" value="4096">
+          </div>
+        </div>
+        <div class="field">
+          <label class="check"><input id="sendThinking" type="checkbox" checked> <span><b>发送 thinking: disabled</b><br>关闭思考模式，答案更短更快。若使用第三方代理且报错，取消勾选。</span></label>
+        </div>
+        <div class="field">
+          <label class="check"><input id="showKey" type="checkbox"> <span><b>在下方预览中显示真实 Key</b><br>默认打码，复制时仍会使用真实 Key。</span></label>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2><span class="step">2</span>测试答题</h2>
+          <p>先用一道简单题确认 Key、余额和模型都正常。</p>
+        </div>
+      </div>
+
+      <div class="example-row" id="examples">
+        <button class="chip" type="button" data-example="single">单选示例</button>
+        <button class="chip" type="button" data-example="multiple">多选示例</button>
+        <button class="chip" type="button" data-example="judgement">判断示例</button>
+        <button class="chip" type="button" data-example="completion">填空示例</button>
+      </div>
+
+      <div class="field">
+        <label for="testType">题型</label>
+        <select id="testType">
+          <option value="single">single · 单选</option>
+          <option value="multiple">multiple · 多选</option>
+          <option value="judgement">judgement · 判断</option>
+          <option value="completion">completion · 填空</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="testTitle">题干</label>
+        <textarea id="testTitle" rows="3" spellcheck="false"></textarea>
+      </div>
+      <div class="field">
+        <label for="testOptions">选项（每行一个；填空题留空）</label>
+        <textarea id="testOptions" rows="5" spellcheck="false"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button id="testBtn" class="btn primary" type="button">测试 DeepSeek</button>
+        <button id="clearTest" class="btn ghost" type="button">清空结果</button>
+      </div>
+
+      <div id="testResult" class="result">
+        <div class="result-top">
+          <span id="resultLabel" class="result-label">结果</span>
+          <span id="resultTime" class="hint"></span>
+        </div>
+        <div id="resultAnswer" class="answer"></div>
+        <p id="resultReason"></p>
+        <div id="resultWarn" class="warn"></div>
+        <details id="rawDetails">
+          <summary>查看模型原始返回</summary>
+          <pre id="resultRaw" class="code"></pre>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2><span class="step">3</span>复制到 OCS</h2>
+        <p>生成的是 OCS 标准 AnswererWrapper 数组，直接粘贴到“题库配置”。</p>
+      </div>
+      <span id="configBadge" class="pill">未生成</span>
+    </div>
+
+    <div class="code-meta">
+      <span id="configMeta">填写 Key 后生成配置</span>
+      <label class="check" style="margin:0"><input id="showKeyInline" type="checkbox"> <span>显示 Key</span></label>
+    </div>
+    <pre id="configPreview" class="code">等待填写 API Key...</pre>
+
+    <div class="btn-row">
+      <button id="copyBtn" class="btn primary" type="button" disabled>复制题库配置</button>
+      <button id="downloadBtn" class="btn" type="button" disabled>下载 JSON</button>
+    </div>
+
+    <ol class="steps">
+      <li>打开 OCS 设置 → <b>题库配置</b>，粘贴上面的 JSON。</li>
+      <li>解析器选 <b>默认</b>，保存；再刷新网课页面。</li>
+      <li>如果使用 <b>GM_xmlhttpRequest</b>，在 OCS 脚本头部元信息加一行 <b>// @connect api.deepseek.com</b>，或安装全域名通用版。</li>
+      <li>先把保存方式设为 <b>不保存也不提交</b>，用“在线搜题”或练习题验证，再开启自动提交。</li>
+      <li>OCS 搜题并发建议 <b>1～2</b>，最大耗时保持 60 秒左右。</li>
+    </ol>
+
+    <div class="notice">
+      <b>安全提醒：</b>生成的 JSON 里含有你的 API Key。不要发到群里、贴到公开仓库或截图分享；如果泄露，去 DeepSeek 平台删除该 Key 并重建。
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2><span class="step">?</span>常见问题</h2>
+        <p>先看这里，大部分“连不上”都是请求方式或 Key 的问题。</p>
+      </div>
+    </div>
+
+    <details class="faq">
+      <summary>OCS 5.2.3 弹“检测到题库配置中包含可疑代码 / 拼接属性访问”</summary>
+      <p>这是 OCS 启发式扫描的误报。旧版生成器把错误提示写成 <code>return ['...' + msg, undefined]</code>，被规则当成 <code>obj['a' + 'b']</code> 这种“拼接属性访问”。它其实是数组字面量，不是隐藏属性调用。更新后的配置改成先 <code>const message = ...</code>，再 <code>return [message, undefined]</code>，不会命中该规则。重新复制一次配置并保存即可；只有确认来源可信时才点“我了解风险，仍然使用”。</p>
+    </details>
+    <details class="faq">
+      <summary>配置成功，但提示“域名/ip 不在脚本的白名单中”</summary>
+      <p>这是 OCS 5.2.3 的域名白名单检查，不是配置错误。在 OCS 脚本最上面的 <b>// ==UserScript==</b> 和 <b>// ==/UserScript==</b> 之间加一行 <b>// @connect api.deepseek.com</b>，保存并刷新网课页面即可。即使请求方式选的是 fetch，5.2.3 也可能做这个检查，所以两种模式都建议加。</p>
+    </details>
+    <details class="faq">
+      <summary>OCS 列表显示“连接失败（401）”，但测试页能答？</summary>
+      <p>OCS 5.2.3 的列表状态是用 <b>HEAD</b> 探测题库地址，而且不带 <b>Authorization</b> 请求头。DeepSeek 的接口要求鉴权，所以这种探测必然返回 401；OCS 把 401 标成“连接失败”，但实际答题的 POST 请求会带上 Key。不要在没验证前就认定 Key 失效：以“测试 DeepSeek”或 OCS 实际搜题结果为准；实际搜题也返回 401 才是 Key 的问题。</p>
+    </details>
+    <details class="faq">
+      <summary>OCS 提示“题库连接失败 / Failed to fetch”</summary>
+      <p>先确认 Key 已填、余额充足。若测试页能通但 OCS 不通，通常是课程页 CSP 拦截了 fetch：把“请求方式”改成 <b>GM_xmlhttpRequest</b> 重新复制配置，并在 OCS 脚本头部加 <b>// @connect api.deepseek.com</b>（或在脚本管理器里把 @connect 设为宽松模式）。</p>
+    </details>
+    <details class="faq">
+      <summary>返回 401 / Authentication Fails</summary>
+      <p>Key 不正确或已被删除。注意 <b>Bearer </b> 后面要有一个空格；重新复制 Key，不要带多余引号或换行。</p>
+    </details>
+    <details class="faq">
+      <summary>返回 402 / Insufficient Balance</summary>
+      <p>DeepSeek 账户余额不足，去平台充值。也可以换一个有余量的 Key。</p>
+    </details>
+    <details class="faq">
+      <summary>返回 429 / Rate limit</summary>
+      <p>请求太频繁。把 OCS 搜题并发降到 1，等几十秒再试。</p>
+    </details>
+    <details class="faq">
+      <summary>DeepSeek 返回空内容 / 不是有效 JSON</summary>
+      <p>JSON 模式偶尔会返回空内容，重新搜一次即可。仍失败可把 temperature 调到 0，或取消“发送 thinking: disabled”再试。</p>
+    </details>
+    <details class="faq">
+      <summary>答案看起来对，但 OCS 不点选项</summary>
+      <p>先确认题型识别正确（单选/多选/判断/填空）。单选应返回一个字母，多选用 # 连接，判断返回“正确/错误”，填空多个空也用 # 连接。如果 OCS 版本较旧，建议升级到当前版本。</p>
+    </details>
+    <details class="faq">
+      <summary>提示“当前题库配置暂不支持图片、公式等题目处理”</summary>
+      <p>这是旧配置没有引用图片字段导致的提示。更新后的配置在 <b>messages.handler</b> 里读取 <b>env.images</b>、<b>env.suggestion_title</b> 和 <b>env.suggestion_options</b>，OCS 5.2.3 会识别为支持图片题，并把图片按顺序作为 <b>image_url</b> 发给 <b>deepseek-flash</b>。重新复制一次题库配置即可；同时确认 OCS 高级设置里开启了“图片题优化”，模型不要选不支持视觉的 <b>deepseek-v4-pro</b>。</p>
+    </details>
+    <details class="faq">
+      <summary>图片题 / 公式题能用吗？</summary>
+      <p>可以。OCS 5.2.3 开启“图片题优化”后，会把题目/选项里的图片转成 base64 放进 <b>env.images</b>；新版配置会把图片按顺序作为 <b>image_url</b> 内容发给 <b>deepseek-flash</b>，公式图、截图题也能识别。注意：<b>deepseek-v4-pro 不支持视觉输入</b>；图片过大或过多可能超过接口限制。生成器里的文本框测试只能测文字，图片题请在 OCS 实际页面验证。</p>
+    </details>
+    <details class="faq">
+      <summary>AI 答案一定对吗？</summary>
+      <p>不一定。模型可能理解错题意或出现幻觉。建议只用来对答案、复习和自测；涉及成绩提交时先人工核对，并遵守课程平台和学校的规定。</p>
+    </details>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>DeepSeek × OCS 题库配置生成器 · 本地单页工具</span>
+    <span><a href="https://docs.ocsjs.com/docs/other/api#AnswererWrapper" target="_blank" rel="noreferrer">OCS 开发文档</a> · <a href="https://api-docs.deepseek.com/" target="_blank" rel="noreferrer">DeepSeek API 文档</a></span>
+  </div>
+</footer>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="answerer-core.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    apiKey: $('apiKey'),
+    toggleKey: $('toggleKey'),
+    model: $('model'),
+    mode: $('mode'),
+    modeHint: $('modeHint'),
+    temperature: $('temperature'),
+    maxTokens: $('maxTokens'),
+    sendThinking: $('sendThinking'),
+    showKey: $('showKey'),
+    showKeyInline: $('showKeyInline'),
+    status: $('status'),
+    testType: $('testType'),
+    testTitle: $('testTitle'),
+    testOptions: $('testOptions'),
+    testBtn: $('testBtn'),
+    clearTest: $('clearTest'),
+    testResult: $('testResult'),
+    resultLabel: $('resultLabel'),
+    resultTime: $('resultTime'),
+    resultAnswer: $('resultAnswer'),
+    resultReason: $('resultReason'),
+    resultWarn: $('resultWarn'),
+    resultRaw: $('resultRaw'),
+    rawDetails: $('rawDetails'),
+    configPreview: $('configPreview'),
+    configMeta: $('configMeta'),
+    configBadge: $('configBadge'),
+    copyBtn: $('copyBtn'),
+    downloadBtn: $('downloadBtn'),
+    toast: $('toast')
+  };
+
+  var PREFS_KEY = 'deepseek-ocs-qbank-prefs-v1';
+  var toastTimer = null;
+  var lastRaw = '';
+
+  function clampNumber(value, min, max, fallback) {
+    var n = Number(value);
+    if (!isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function getKey() {
+    return (els.apiKey.value || '').trim();
+  }
+
+  function getModel() {
+    return (els.model.value || '').trim() || 'deepseek-flash';
+  }
+
+  function getMode() {
+    return els.mode.value === 'GM_xmlhttpRequest' ? 'GM_xmlhttpRequest' : 'fetch';
+  }
+
+  function getTemperature() {
+    return clampNumber(els.temperature.value, 0, 2, 0.1);
+  }
+
+  function getMaxTokens() {
+    return Math.floor(clampNumber(els.maxTokens.value, 64, 8192, 4096));
+  }
+
+  function buildConfig(apiKey) {
+    return DeepSeekQBank.createConfig({
+      apiKey: apiKey,
+      model: getModel(),
+      mode: getMode(),
+      sendThinking: els.sendThinking.checked,
+      temperature: getTemperature(),
+      maxTokens: getMaxTokens()
+    });
+  }
+
+  function getConfigForCopy() {
+    return buildConfig(getKey() || 'sk-请在此填入你的Key');
+  }
+
+  function getPreviewConfig() {
+    var config = buildConfig(getKey() || 'sk-请在此填入你的Key');
+    if (getKey() && !(els.showKey.checked || els.showKeyInline.checked)) {
+      var clone = JSON.parse(JSON.stringify(config));
+      clone[0].headers.Authorization = 'Bearer sk-••••••••（已隐藏，复制时使用真实 Key）';
+      return clone;
+    }
+    return config;
+  }
+
+  function renderConfig() {
+    var config = getPreviewConfig();
+    var json = JSON.stringify(config, null, 2);
+    els.configPreview.textContent = json;
+    var hasKey = !!getKey();
+    els.copyBtn.disabled = !hasKey;
+    els.downloadBtn.disabled = !hasKey;
+    els.configBadge.textContent = hasKey ? '已生成' : '未生成';
+    els.configBadge.className = 'pill' + (hasKey ? ' ok' : '');
+    els.configMeta.textContent = hasKey
+      ? 'JSON · ' + json.length + ' 字符 · ' + (getMode() === 'GM_xmlhttpRequest' ? 'GM 请求' : 'fetch 请求')
+      : '填写 Key 后生成配置';
+    if (hasKey) {
+      setStatus('ready', '配置已生成');
+    } else {
+      setStatus('', '等待填写 Key');
+    }
+  }
+
+  function setStatus(kind, text) {
+    els.status.className = 'pill' + (kind ? ' ' + kind : '');
+    els.status.textContent = text;
+  }
+
+  function toast(message) {
+    els.toast.textContent = message;
+    els.toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { els.toast.classList.remove('show'); }, 2200);
+  }
+
+  function updateModeHint() {
+    if (getMode() === 'GM_xmlhttpRequest') {
+      els.modeHint.innerHTML = '需要给 OCS 脚本加 <b>// @connect api.deepseek.com</b>，或使用全域名通用版。';
+    } else {
+      els.modeHint.innerHTML = 'OCS 5.2.3 仍会检查域名白名单；需要加 <b>// @connect api.deepseek.com</b>。如果课程页 CSP 再拦截，换 GM 模式。';
+    }
+  }
+
+  function savePrefs() {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({
+        model: getModel(),
+        mode: getMode(),
+        temperature: getTemperature(),
+        maxTokens: getMaxTokens(),
+        sendThinking: els.sendThinking.checked
+      }));
+    } catch (e) {}
+  }
+
+  function loadPrefs() {
+    try {
+      var raw = localStorage.getItem(PREFS_KEY);
+      if (!raw) return;
+      var p = JSON.parse(raw);
+      if (p.model) els.model.value = p.model;
+      if (p.mode) els.mode.value = p.mode;
+      if (typeof p.temperature === 'number') els.temperature.value = p.temperature;
+      if (typeof p.maxTokens === 'number') els.maxTokens.value = p.maxTokens;
+      if (typeof p.sendThinking === 'boolean') els.sendThinking.checked = p.sendThinking;
+    } catch (e) {}
+  }
+
+  function setTestResult(kind, answer, reason, meta, raw) {
+    els.testResult.className = 'result show' + (kind ? ' ' + kind : '');
+    els.resultLabel.textContent = kind === 'ok' ? '模型答案' : '出错';
+    els.resultAnswer.textContent = answer || '';
+    els.resultReason.textContent = reason || '';
+    els.resultWarn.textContent = '';
+    els.resultTime.textContent = meta || '';
+    els.rawDetails.style.display = raw ? 'block' : 'none';
+    els.resultRaw.textContent = raw || '';
+  }
+
+  function validateAnswer(type, answer, options) {
+    if (!answer) return '';
+    if ((type === 'single' || type === 'multiple') && !options.trim()) {
+      return '注意：选择题没有填写选项，OCS 无法匹配答案。';
+    }
+    var optionCount = options.split(/\n+/).filter(function (line) { return line.trim(); }).length;
+    if (type === 'single') {
+      if (!/^[A-Z]$/.test(answer)) return '注意：单选题答案不是单个字母，OCS 可能无法自动选择。';
+      if (optionCount && answer.charCodeAt(0) - 65 >= optionCount) return '注意：答案字母超出选项数量。';
+    }
+    if (type === 'multiple') {
+      var letters = answer.split('#').filter(Boolean);
+      if (!letters.length || letters.some(function (x) { return !/^[A-Z]$/.test(x); })) {
+        return '注意：多选题答案不是 A#C 这种字母格式，OCS 可能无法自动选择。';
+      }
+      if (optionCount && letters.some(function (x) { return x.charCodeAt(0) - 65 >= optionCount; })) {
+        return '注意：答案字母超出选项数量。';
+      }
+    }
+    if (type === 'judgement' && answer !== '正确' && answer !== '错误') {
+      return '注意：判断题答案不是“正确/错误”，OCS 可能无法自动选择。';
+    }
+    return '';
+  }
+
+  async function testAnswer() {
+    var key = getKey();
+    var title = els.testTitle.value.trim();
+    var options = els.testOptions.value.trim();
+    var type = els.testType.value;
+
+    if (!key) {
+      toast('先填写 DeepSeek API Key');
+      els.apiKey.focus();
+      return;
+    }
+    if (!title) {
+      toast('先填写题干');
+      els.testTitle.focus();
+      return;
+    }
+
+    var body = {
+      model: getModel(),
+      messages: DeepSeekQBank.buildMessages({ title: title, type: type, options: options }),
+      response_format: { type: 'json_object' },
+      temperature: getTemperature(),
+      max_tokens: getMaxTokens(),
+      stream: false
+    };
+    if (els.sendThinking.checked) body.thinking = { type: 'disabled' };
+
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 60000);
+    var started = Date.now();
+    lastRaw = '';
+    els.rawDetails.open = false;
+    els.testBtn.disabled = true;
+    els.testBtn.textContent = '请求中...';
+    setStatus('', '测试中...');
+    els.testResult.className = 'result';
+
+    try {
+      var response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + key
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      var text = await response.text();
+      var data = null;
+      try { data = JSON.parse(text); } catch (e) {}
+      if (!data) {
+        throw new Error('HTTP ' + response.status + ' 返回了非 JSON 内容：' + text.slice(0, 200));
+      }
+      lastRaw = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || text;
+      var parsed = DeepSeekQBank.parseResponse(data);
+      var elapsed = ((Date.now() - started) / 1000).toFixed(1) + 's';
+      if (!parsed[1]) {
+        setTestResult('bad', parsed[0] || '没有拿到答案', '', elapsed, lastRaw);
+        setStatus('bad', '测试失败');
+        return;
+      }
+      var meta = parsed[2] || {};
+      var warn = validateAnswer(type, parsed[1], options);
+      setTestResult('ok', parsed[1], meta.reason || '', elapsed, lastRaw);
+      els.resultWarn.textContent = warn;
+      setStatus('ok', '连接成功');
+      if (data.usage) {
+        els.resultReason.textContent = (meta.reason ? meta.reason + ' · ' : '') + 'tokens: ' + (data.usage.total_tokens || '?');
+      }
+    } catch (e) {
+      var msg;
+      if (e && e.name === 'AbortError') {
+        msg = '请求超时（60 秒）。检查网络或稍后重试。';
+      } else if (e && /Failed to fetch|NetworkError|Load failed/i.test(String(e.message || e))) {
+        msg = '浏览器请求失败。可能是网络/CORS/CSP；先确认能访问 api.deepseek.com。';
+      } else {
+        msg = String((e && e.message) || e);
+      }
+      setTestResult('bad', msg, '', '', lastRaw);
+      setStatus('bad', '测试失败');
+    } finally {
+      clearTimeout(timer);
+      els.testBtn.disabled = false;
+      els.testBtn.textContent = '测试 DeepSeek';
+    }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  async function copyConfig() {
+    var key = getKey();
+    if (!key) { toast('先填写 API Key'); return; }
+    var json = JSON.stringify(getConfigForCopy(), null, 2);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(json);
+          toast('已复制，去 OCS 题库配置里粘贴');
+          return;
+        } catch (e) {}
+      }
+      if (fallbackCopy(json)) {
+        toast('已复制，去 OCS 题库配置里粘贴');
+        return;
+      }
+      throw new Error('copy failed');
+    } catch (e) {
+      toast('复制失败，请手动选中下方 JSON 复制');
+      els.configPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function downloadConfig() {
+    var key = getKey();
+    if (!key) { toast('先填写 API Key'); return; }
+    var json = JSON.stringify(getConfigForCopy(), null, 2);
+    var blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'ocs-deepseek-config.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('已下载 ocs-deepseek-config.json');
+  }
+
+  var examples = {
+    single: {
+      type: 'single',
+      title: '中国特色社会主义最本质的特征是什么？',
+      options: 'A. 人民当家作主\nB. 中国共产党领导\nC. 依法治国\nD. 共同富裕'
+    },
+    multiple: {
+      type: 'multiple',
+      title: '下列哪些属于 Web 前端技术？',
+      options: 'A. HTML\nB. CSS\nC. JavaScript\nD. MySQL'
+    },
+    judgement: {
+      type: 'judgement',
+      title: 'HTTP 是一种无状态协议。',
+      options: '正确\n错误'
+    },
+    completion: {
+      type: 'completion',
+      title: '中华人民共和国成立于____年。',
+      options: ''
+    }
+  };
+
+  function fillExample(kind) {
+    var e = examples[kind] || examples.single;
+    els.testType.value = e.type;
+    els.testTitle.value = e.title;
+    els.testOptions.value = e.options;
+    els.testResult.className = 'result';
+    els.rawDetails.open = false;
+  }
+
+  function bind() {
+    els.apiKey.addEventListener('input', renderConfig);
+    els.model.addEventListener('input', function () { renderConfig(); savePrefs(); });
+    els.mode.addEventListener('change', function () { updateModeHint(); renderConfig(); savePrefs(); });
+    els.temperature.addEventListener('input', function () { savePrefs(); renderConfig(); });
+    els.maxTokens.addEventListener('input', function () { savePrefs(); renderConfig(); });
+    els.sendThinking.addEventListener('change', function () { savePrefs(); renderConfig(); });
+    els.showKey.addEventListener('change', function () {
+      els.showKeyInline.checked = els.showKey.checked;
+      renderConfig();
+    });
+    els.showKeyInline.addEventListener('change', function () {
+      els.showKey.checked = els.showKeyInline.checked;
+      renderConfig();
+    });
+    els.toggleKey.addEventListener('click', function () {
+      var isPassword = els.apiKey.type === 'password';
+      els.apiKey.type = isPassword ? 'text' : 'password';
+      els.toggleKey.textContent = isPassword ? '隐藏' : '显示';
+    });
+    els.testBtn.addEventListener('click', testAnswer);
+    els.clearTest.addEventListener('click', function () {
+      els.testResult.className = 'result';
+      els.rawDetails.open = false;
+      renderConfig();
+    });
+    els.copyBtn.addEventListener('click', copyConfig);
+    els.downloadBtn.addEventListener('click', downloadConfig);
+    $('examples').addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-example]');
+      if (btn) fillExample(btn.getAttribute('data-example'));
+    });
+    els.testTitle.addEventListener('keydown', function (event) {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') testAnswer();
+    });
+  }
+
+  loadPrefs();
+  bind();
+  updateModeHint();
+  fillExample('single');
+  renderConfig();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>RUNNING</title>
+<style>body{font-family:Consolas,monospace;background:#0d1728;color:#dbe7ff;padding:20px}pre{white-space:pre-wrap}iframe{width:1100px;height:500px;border:1px solid #334155;opacity:.15;position:fixed;left:-2000px;top:0}</style>
+</head>
+<body>
+<iframe id="frame" src="../index.html"></iframe>
+<pre id="out">running...</pre>
+<script>
+(function () {
+  'use strict';
+  var lines = [];
+  var failures = 0;
+  var passes = 0;
+  function record(ok, name, detail) {
+    if (ok) { passes++; lines.push('PASS  ' + name); }
+    else { failures++; lines.push('FAIL  ' + name + (detail ? '\n      ' + detail : '')); }
+  }
+  function ok(name, cond, detail) { record(!!cond, name, detail || ''); }
+  function eq(name, a, b) { record(a === b, name, 'expected=' + JSON.stringify(b) + ' actual=' + JSON.stringify(a)); }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var frame = document.getElementById('frame');
+  frame.addEventListener('load', async function () {
+    try {
+      await wait(300);
+      var w = frame.contentWindow;
+      var d = frame.contentDocument;
+      ok('page loaded', !!d && d.title.indexOf('DeepSeek') !== -1, d && d.title);
+      ok('core loaded', !!(w && w.DeepSeekQBank));
+
+      var key = d.getElementById('apiKey');
+      key.value = 'sk-test-key';
+      key.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await wait(30);
+
+      var preview = d.getElementById('configPreview').textContent;
+      ok('preview has masked key', preview.indexOf('••••') !== -1);
+      ok('preview does not expose key', preview.indexOf('sk-test-key') === -1);
+      ok('copy enabled after key', d.getElementById('copyBtn').disabled === false);
+      ok('download enabled after key', d.getElementById('downloadBtn').disabled === false);
+
+      d.getElementById('showKeyInline').checked = true;
+      d.getElementById('showKeyInline').dispatchEvent(new w.Event('change', { bubbles: true }));
+      await wait(20);
+      ok('preview can show key', d.getElementById('configPreview').textContent.indexOf('sk-test-key') !== -1);
+
+      w.fetch = async function (url, opts) {
+        ok('request URL', url === 'https://api.deepseek.com/chat/completions', url);
+        var body = JSON.parse(opts.body);
+        eq('request model', body.model, 'deepseek-flash');
+        eq('request thinking', body.thinking && body.thinking.type, 'disabled');
+        eq('request response_format', body.response_format && body.response_format.type, 'json_object');
+        eq('request messages', body.messages.length, 2);
+        return {
+          ok: true,
+          status: 200,
+          text: async function () {
+            return JSON.stringify({
+              choices: [{ message: { content: '{"kind":"single","answer":"B","reason":"test reason"}' }, finish_reason: 'stop' }],
+              usage: { total_tokens: 123 }
+            });
+          }
+        };
+      };
+
+      d.getElementById('testTitle').value = '1 + 1 等于几？';
+      d.getElementById('testOptions').value = 'A. 1\nB. 2\nC. 3\nD. 4';
+      d.getElementById('testType').value = 'single';
+      d.getElementById('testBtn').click();
+      await wait(300);
+
+      eq('answer shown', d.getElementById('resultAnswer').textContent, 'B');
+      ok('reason shown', d.getElementById('resultReason').textContent.indexOf('test reason') !== -1);
+      ok('status success', d.getElementById('status').textContent.indexOf('连接成功') !== -1, d.getElementById('status').textContent);
+      ok('result ok class', d.getElementById('testResult').className.indexOf('ok') !== -1, d.getElementById('testResult').className);
+      ok('no warning', d.getElementById('resultWarn').textContent === '', d.getElementById('resultWarn').textContent);
+    } catch (e) {
+      record(false, 'unexpected exception', String(e && e.stack || e));
+    }
+    var out = document.getElementById('out');
+    out.textContent = 'RESULT: ' + (failures ? 'FAIL' : 'PASS') + '\npassed: ' + passes + ', failed: ' + failures + '\n\n' + lines.join('\n');
+    document.title = failures ? 'FAIL' : 'PASS';
+    document.body.setAttribute('data-result', failures ? 'FAIL' : 'PASS');
+  });
+  setTimeout(function () {
+    if (document.title === 'RUNNING') {
+      document.getElementById('out').textContent = 'RESULT: FAIL\niframe load timeout';
+      document.title = 'FAIL';
+      document.body.setAttribute('data-result', 'FAIL');
+    }
+  }, 8000);
+})();
+</script>
+</body>
+</html>

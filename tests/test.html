@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RUNNING</title>
+<style>
+  body { font-family: Consolas, monospace; background: #0d1728; color: #dbe7ff; padding: 24px; }
+  pre { white-space: pre-wrap; line-height: 1.7; }
+  .pass { color: #4ade80; }
+  .fail { color: #f87171; }
+</style>
+</head>
+<body>
+<pre id="out">running...</pre>
+<script src="../answerer-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var lines = [];
+  var failures = 0;
+  var passes = 0;
+
+  function record(ok, name, detail) {
+    if (ok) {
+      passes++;
+      lines.push('PASS  ' + name);
+    } else {
+      failures++;
+      lines.push('FAIL  ' + name + (detail ? '\n      ' + detail : ''));
+    }
+  }
+
+  function eq(name, actual, expected) {
+    var a = JSON.stringify(actual);
+    var e = JSON.stringify(expected);
+    record(a === e, name, 'expected=' + e + ' actual=' + a);
+  }
+
+  function ok(name, condition, detail) {
+    record(!!condition, name, detail || '');
+  }
+
+  function fake(content, finishReason) {
+    return {
+      choices: [{
+        message: { content: content },
+        finish_reason: finishReason || 'stop'
+      }]
+    };
+  }
+
+  var q = {
+    title: '中国特色社会主义最本质的特征是什么？',
+    type: 'single',
+    options: 'A. 人民当家作主\nB. 中国共产党领导\nC. 依法治国\nD. 共同富裕'
+  };
+
+  var msgs = DeepSeekQBank.buildMessages(q);
+  eq('buildMessages returns two messages', msgs.length, 2);
+  eq('system role', msgs[0].role, 'system');
+  ok('system prompt contains JSON instruction', msgs[0].content.indexOf('JSON') !== -1);
+  ok('system prompt contains output example', msgs[0].content.indexOf('"answer"') !== -1);
+  eq('user role', msgs[1].role, 'user');
+  var userPayload = JSON.parse(msgs[1].content.split('\n').slice(1).join('\n'));
+  eq('user payload title', userPayload.title, q.title);
+  eq('user payload type', userPayload.type, 'single');
+  eq('user payload options', userPayload.options, q.options);
+  eq('user payload option count', userPayload.option_count, 4);
+
+  var arrayMsgs = DeepSeekQBank.buildMessages({ title: 't', type: 'multiple', options: ['A. x', 'B. y'] });
+  var arrayPayload = JSON.parse(arrayMsgs[1].content.split('\n').slice(1).join('\n'));
+  eq('options array joined', arrayPayload.options, 'A. x\nB. y');
+
+  var imageMessages = DeepSeekQBank.buildMessages({
+    title: '求图中角度',
+    type: 'single',
+    options: 'A. 30°\nB. 45°',
+    suggestion_title: '求图中角度 [图片1]',
+    suggestion_options: 'A. 30° [图片2]\nB. 45°',
+    images: ['data:image/png;base64,AAA', 'data:image/png;base64,BBB']
+  });
+  eq('image messages length', imageMessages.length, 2);
+  ok('image content is array', Array.isArray(imageMessages[1].content));
+  eq('image content parts', imageMessages[1].content.length, 3);
+  eq('image text part', imageMessages[1].content[0].type, 'text');
+  eq('image part 1', imageMessages[1].content[1].image_url.url, 'data:image/png;base64,AAA');
+  eq('image part 2', imageMessages[1].content[2].image_url.url, 'data:image/png;base64,BBB');
+  var imagePayload = JSON.parse(imageMessages[1].content[0].text.split('\n')[1]);
+  eq('suggestion title used', imagePayload.title, '求图中角度 [图片1]');
+  eq('suggestion options used', imagePayload.options, 'A. 30° [图片2]\nB. 45°');
+  eq('image count in payload', imagePayload.image_count, 2);
+
+  var single = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'single', answer: 'B', reason: 'test' })));
+  eq('single answer', single[1], 'B');
+  eq('single question is undefined', single[0], undefined);
+  eq('single meta kind', single[2].kind, 'single');
+
+  var singleLong = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'single', answer: 'B. 中国共产党领导' })));
+  eq('single strips option text', singleLong[1], 'B');
+
+  var singleSentence = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'single', answer: '答案是 B。' })));
+  eq('single sentence answer', singleSentence[1], 'B');
+
+  var multiple = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'multiple', answer: 'A, C' })));
+  eq('multiple separators normalized', multiple[1], 'A#C');
+
+  var multipleHash = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'multiple', answer: 'C#A#A' })));
+  eq('multiple dedupe and sort', multipleHash[1], 'A#C');
+
+  var multipleAnd = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'multiple', answer: 'A和C' })));
+  eq('multiple chinese connector', multipleAnd[1], 'A#C');
+
+  var multipleAnd2 = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'multiple', answer: 'A以及C' })));
+  eq('multiple chinese connector 2', multipleAnd2[1], 'A#C');
+
+  var judgementYes = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'judgement', answer: '对' })));
+  eq('judgement yes normalized', judgementYes[1], '正确');
+
+  var judgementNo = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'judgement', answer: '错误。' })));
+  eq('judgement no normalized', judgementNo[1], '错误');
+
+  var judgementParen = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'judgement', answer: '正确（√）' })));
+  eq('judgement parenthesized', judgementParen[1], '正确');
+
+  var completion = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'completion', answer: '1949' })));
+  eq('completion answer', completion[1], '1949');
+
+  var completionPrefix = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'completion', answer: '答案：1949' })));
+  eq('completion prefix stripped', completionPrefix[1], '1949');
+
+  var fallbackAnswers = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'completion', answers: ['x', 'y'] })));
+  eq('answers array fallback', fallbackAnswers[1], 'x#y');
+
+  var fenced = '\x60\x60\x60json\n' + JSON.stringify({ kind: 'single', answer: 'C' }) + '\n\x60\x60\x60';
+  var fencedParsed = DeepSeekQBank.parseResponse(fake(fenced));
+  eq('code fence stripped', fencedParsed[1], 'C');
+
+  var surrounded = '答案如下：\n' + JSON.stringify({ kind: 'single', answer: 'D' }) + '\n请核对。';
+  var surroundedParsed = DeepSeekQBank.parseResponse(fake(surrounded));
+  eq('json extracted from prose', surroundedParsed[1], 'D');
+
+  var uncertain = DeepSeekQBank.parseResponse(fake(JSON.stringify({ kind: 'single', answer: '', uncertain: true, reason: '题目缺图' })));
+  eq('uncertain has no answer', uncertain[1], undefined);
+  ok('uncertain exposes reason', uncertain[0].indexOf('题目缺图') !== -1);
+
+  var empty = DeepSeekQBank.parseResponse(fake('   '));
+  eq('empty content has no answer', empty[1], undefined);
+  ok('empty content message', empty[0].indexOf('空内容') !== -1);
+
+  var invalid = DeepSeekQBank.parseResponse(fake('not json'));
+  eq('invalid json has no answer', invalid[1], undefined);
+  ok('invalid json message', invalid[0].indexOf('不是有效 JSON') !== -1);
+
+  var truncated = DeepSeekQBank.parseResponse(fake('{"kind":"single","answer":"A"}', 'length'));
+  eq('truncated has no answer', truncated[1], undefined);
+  ok('truncated message', truncated[0].indexOf('未完整结束') !== -1);
+
+  var apiError = DeepSeekQBank.parseResponse({ error: { message: 'Authentication Fails' } });
+  eq('api error has no answer', apiError[1], undefined);
+  ok('api error message', apiError[0].indexOf('Authentication Fails') !== -1);
+
+  var config = DeepSeekQBank.createConfig({
+    apiKey: 'sk-test',
+    model: 'deepseek-flash',
+    mode: 'GM_xmlhttpRequest',
+    sendThinking: true,
+    temperature: 0,
+    maxTokens: 2048
+  });
+  eq('config is array with one wrapper', config.length, 1);
+  eq('config name', config[0].name, 'DeepSeek 自动答题');
+  eq('config url', config[0].url, 'https://api.deepseek.com/chat/completions');
+  eq('config method', config[0].method, 'post');
+  eq('config type', config[0].type, 'GM_xmlhttpRequest');
+  eq('config contentType', config[0].contentType, 'json');
+  eq('config auth header', config[0].headers.Authorization, 'Bearer sk-test');
+  eq('config model', config[0].data.model, 'deepseek-flash');
+  eq('config thinking disabled', config[0].data.thinking.type, 'disabled');
+  eq('config temperature', config[0].data.temperature, 0);
+  eq('config max tokens', config[0].data.max_tokens, 2048);
+  eq('config stream', config[0].data.stream, false);
+  ok('config has no DeepSeekQBank reference in handler', config[0].handler.indexOf('DeepSeekQBank') === -1);
+  ok('config has no DeepSeekQBank reference in messages handler', config[0].data.messages.handler.indexOf('DeepSeekQBank') === -1);
+  var imageSupportPattern = /(^|[^\w$])(images|suggestion_title|suggestion_options)(?![\w$])/;
+  ok('config declares image support for OCS', imageSupportPattern.test(config[0].data.messages.handler));
+  eq('config method is post for image support', config[0].method, 'post');
+
+  function ocsSupportsImages(aw) {
+    if (String(aw.method || 'get').toLowerCase() !== 'post') return false;
+    var data = aw.data || {};
+    for (var key in data) {
+      var value = data[key];
+      if (typeof value === 'string') {
+        if (value.indexOf('${images}') !== -1 || value.indexOf('${suggestion_title}') !== -1 || value.indexOf('${suggestion_options}') !== -1) return true;
+      } else if (value && typeof value === 'object' && typeof value.handler === 'string' && imageSupportPattern.test(value.handler)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  ok('OCS 5.2.3 image support detection returns true', ocsSupportsImages(config[0]));
+
+  var messagesFn = new Function(config[0].data.messages.handler)();
+  eq('serialized messages handler is function', typeof messagesFn, 'function');
+  var runtimeMessages = messagesFn(q);
+  eq('serialized messages length', runtimeMessages.length, 2);
+  ok('serialized messages has system prompt', runtimeMessages[0].content.indexOf('JSON') !== -1);
+
+  var responseFn = new Function(config[0].handler)();
+  eq('serialized response handler is function', typeof responseFn, 'function');
+  var runtimeParsed = responseFn(fake(JSON.stringify({ kind: 'single', answer: 'B', reason: 'ok' })));
+  eq('serialized handler answer', runtimeParsed[1], 'B');
+
+  var noThinking = DeepSeekQBank.createConfig({ apiKey: 'sk-x', sendThinking: false });
+  ok('thinking omitted when disabled', !Object.prototype.hasOwnProperty.call(noThinking[0].data, 'thinking'));
+  eq('default mode fetch', noThinking[0].type, 'fetch');
+  eq('default model', noThinking[0].data.model, 'deepseek-flash');
+
+  var clamped = DeepSeekQBank.createConfig({ apiKey: 'sk-x', maxTokens: 1, temperature: 9 });
+  eq('max tokens clamped', clamped[0].data.max_tokens, 64);
+  eq('temperature preserved (clamped by UI only)', clamped[0].data.temperature, 9);
+
+  var out = document.getElementById('out');
+  out.className = failures ? 'fail' : 'pass';
+  out.textContent = 'RESULT: ' + (failures ? 'FAIL' : 'PASS') + '\n' +
+    'passed: ' + passes + ', failed: ' + failures + '\n\n' + lines.join('\n');
+  document.title = failures ? 'FAIL' : 'PASS';
+  document.body.setAttribute('data-result', failures ? 'FAIL' : 'PASS');
+})();
+</script>
+</body>
+</html>
